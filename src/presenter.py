@@ -11,10 +11,11 @@ import typing as t
 
 import exceptions  # user exceptions
 from model_interface import Model
-from model_json import ModelJSON  # connection to the Model part of the pattern
+from model_sqlite import ModelSQLite  # connection to the Model part of the pattern
 
 from view_interface import View
 from view_cli import ViewCLI  # connection to the View part of the pattern
+from common import VERSION
 
 from common import VALID_CHARS, URL_FIELDS, FOLDER_FIELDS  # constants
 from common import MenuItem, Field  # user types
@@ -33,14 +34,12 @@ class Presenter:
         self.START_MENU = (
             MenuItem("Create a new bookmark's tree", self.create_tree),
             MenuItem("Open the bookmark's tree", self.open_tree),
-            MenuItem("Convert external bookmark database to the internal format", self.convert_from),
             MenuItem("Exit", self.exit_of_loop),
         )  # start menu to open or create the current bookmark structure
 
         self.MAIN_MENU = (
             MenuItem("Create a new bookmark's tree", self.create_tree),
             MenuItem("Open the bookmark's tree", self.open_tree),
-            MenuItem("Convert external bookmark database to the internal format", self.convert_from),
             MenuItem("Add a new node to the current tree, folder of url", self.add_bookmark),
             MenuItem("Modify the node of the current tree, folder or url", self.modify_bookmark),
             MenuItem("Delete the node of the current tree, folder or url", self.delete_bookmark),
@@ -50,7 +49,7 @@ class Presenter:
 
         self.view = View(ViewCLI())  # instance of a View implementation, here for CLI terminal
         self.menu_items: tuple[MenuItem, ...] = self.START_MENU    # prepare for start main menu
-        self.model = Model(ModelJSON()) # instance of a Model implementation, here for internal/JSON version
+        self.model = Model(ModelSQLite()) # instance of a Model implementation, here for SQLite version
 
     # ---- begin of the execution methods section ----
     @staticmethod
@@ -358,58 +357,6 @@ class Presenter:
         _output_loop(init_node, init_tab)  # load initial node name and tabulation for recursion
         return True
 
-    def convert_from(self) -> bool:
-        """Convert external bookmark database to the internal format.
-        Request a name of the external source file, check if it exists.
-        Request a filename of the new internal bookmark structure and create it.
-        Request a format of the external source and convert this file.
-
-
-        :return: True for success otherwise False
-        """
-        self.view.output_header(self.view.main_header)  # print the header
-
-        # ---- get source file name and check if the source file exists ----
-        prompt = "Input a name of the external source file"  # set a prompt for the name request of the source
-        filename = self.view.input_line(prompt)  # get an external source file name
-        if filename is None:
-            return False  # to the main menu, break
-        try:
-            with open(filename, 'r') as f:  # open the source file, or FileNotFoundError exception
-                pass
-        except FileNotFoundError:
-            except_message = f'File "{filename}" not exists in the work directory {self.model.cwd}'
-            self.view.output_string(except_message)     # output an error
-            return False  # to the main menu
-
-        # ---- create a new database as the destination for conversation ----
-        result = self.create_tree()
-        if not result:
-            return False  # to the main menu, break
-
-        # ---- request a format of the source file: Chrome, Mozilla or smth. else ----
-        menu_items = (
-             MenuItem("Convert from Chrome JSON format", self.model.convert_chrome),
-             MenuItem("Convert from Mozilla format", self.model.convert_mozilla),
-             MenuItem("Exit", self.exit_of_loop)
-        )   # a local menu for format selection
-
-        menu_item = self.get_request(menu_items)  # get a menu item
-        if menu_item is None:
-            return True  # return to the upper menu
-
-        self.view.output_string(f'Convert external file <{filename}> to the tree')  # output the message
-
-        result, data = menu_item.call(filename)  # execute the selected method, source filename as param
-        if result:  # conversation was successful
-            self.view.output_string(f'File <{filename}> was converted to the current tree {chr(10)}')  # output ok
-            return True
-        else:
-            self.view.output_string(data)  # output an error message of the result
-            return False
-
-    # ---- end of the execution methods section ----
-
     def get_request(self, menu_items: tuple[MenuItem, ...]) -> t.Optional[MenuItem]:
         """Get a user request from menu options. Menu is a tuple."""
         item_list = tuple([item.descr for item in menu_items])  # prepare a list of items
@@ -435,7 +382,7 @@ def main():
     request_handler = Presenter()
     # --------------------------------------------------
     while True:
-        request_handler.view.output_header('Main menu')
+        request_handler.view.output_header(f'Bookmark Manager ver.{VERSION}, main menu')
         menu_item = request_handler.get_request(request_handler.menu_items)
         if menu_item is None or menu_item.descr == 'Exit':
             break

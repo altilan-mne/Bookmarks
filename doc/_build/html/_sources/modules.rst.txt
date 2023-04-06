@@ -7,8 +7,7 @@ src
    common
    exceptions
    model_interface
-   model_json
-   my_nodes
+   model_sqlite
    presenter
    tests
    time_convert

@@ -16,7 +16,7 @@ In the future it supposes to add other implementations of View with quasi-graphi
 
 Notes
 -----
-- Release 1.0 has an own internal database structure and keep it an JSON file.
+- Release 2.0 Model part was implemented with the local database SQLite for Python 3.
 - User interface was implemented by CLI.
 
 .. toctree::

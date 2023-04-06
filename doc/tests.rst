@@ -4,10 +4,10 @@ tests package
 Submodules
 ----------
 
-tests.test\_model\_json module
-------------------------------
+tests.test\_model\_sqlite module
+--------------------------------
 
-.. automodule:: tests.test_model_json
+.. automodule:: tests.test_model_sqlite
    :members:
    :undoc-members:
    :show-inheritance:

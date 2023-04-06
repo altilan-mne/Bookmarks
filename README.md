@@ -7,5 +7,5 @@ A bookmark editor created and refactored during the process of Python studying. 
 
 Notes:
 
-Release 1.1 has an own internal database structure and keep it an JSON file.
+Release 2.1 has an own internal database structure and keep it an JSON file.
 User interface was implemented by CLI.

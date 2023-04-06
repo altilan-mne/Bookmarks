@@ -183,20 +183,3 @@ class Model:
         :return: nothing
         """
         self.proto.delete_database(name)
-
-    # ---- convertors section ----
-    def convert_chrome(self, filename: str) -> tuple[bool, str]:
-        """Convert Chrome bookmark JSON filename to the current tree. Return (True/False, error message)
-
-        :param filename: Google bookmark filename to convert
-        :return: (True, empty string)  or (False, error message)
-        """
-        return self.proto.convert_chrome(filename)
-
-    def convert_mozilla(self, filename: str) -> tuple[bool, str]:
-        """Convert Mozilla bookmark filename to the current tree. Return (True/False, error message).
-
-        :param filename: Mozilla bookmark filename to convert
-        :return: (True, empty string)  or (False, error message)
-        """
-        return self.proto.convert_mozilla(filename)

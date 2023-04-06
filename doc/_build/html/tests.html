@@ -37,68 +37,63 @@
 <section id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this heading">¶</a></h2>
 </section>
-<section id="module-tests.test_model_json">
-<span id="tests-test-model-json-module"></span><h2>tests.test_model_json module<a class="headerlink" href="#module-tests.test_model_json" title="Permalink to this heading">¶</a></h2>
-<p>Tests of Model module implementation with internal tree and JSON storage.</p>
+<section id="module-tests.test_model_sqlite">
+<span id="tests-test-model-sqlite-module"></span><h2>tests.test_model_sqlite module<a class="headerlink" href="#module-tests.test_model_sqlite" title="Permalink to this heading">¶</a></h2>
+<p>Tests of Model module implementation with SQLite database.</p>
 <dl class="py class">
-<dt class="sig sig-object py" id="tests.test_model_json.TestModulJSON">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">tests.test_model_json.</span></span><span class="sig-name descname"><span class="pre">TestModulJSON</span></span><a class="headerlink" href="#tests.test_model_json.TestModulJSON" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="tests.test_model_sqlite.TestModulSQLite">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">tests.test_model_sqlite.</span></span><span class="sig-name descname"><span class="pre">TestModulSQLite</span></span><a class="headerlink" href="#tests.test_model_sqlite.TestModulSQLite" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<p>Testing class for internal and JSON Model class</p>
+<p>Testing class for SQLite Model implementation</p>
 <dl class="py attribute">
-<dt class="sig sig-object py" id="tests.test_model_json.TestModulJSON.jm">
-<span class="sig-name descname"><span class="pre">jm</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;model_json.ModelJSON</span> <span class="pre">object&gt;</span></em><a class="headerlink" href="#tests.test_model_json.TestModulJSON.jm" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="tests.test_model_sqlite.TestModulSQLite.sqlm">
+<span class="sig-name descname"><span class="pre">sqlm</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;model_sqlite.ModelSQLite</span> <span class="pre">object&gt;</span></em><a class="headerlink" href="#tests.test_model_sqlite.TestModulSQLite.sqlm" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="tests.test_model_json.TestModulJSON.test_add_node">
-<span class="sig-name descname"><span class="pre">test_add_node</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_json.TestModulJSON.test_add_node" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="tests.test_model_sqlite.TestModulSQLite.test_add_node">
+<span class="sig-name descname"><span class="pre">test_add_node</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_sqlite.TestModulSQLite.test_add_node" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="tests.test_model_json.TestModulJSON.test_create_database">
-<span class="sig-name descname"><span class="pre">test_create_database</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_json.TestModulJSON.test_create_database" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="tests.test_model_json.TestModulJSON.test_delete_database">
-<span class="sig-name descname"><span class="pre">test_delete_database</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_json.TestModulJSON.test_delete_database" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="tests.test_model_json.TestModulJSON.test_delete_node">
-<span class="sig-name descname"><span class="pre">test_delete_node</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_json.TestModulJSON.test_delete_node" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="tests.test_model_json.TestModulJSON.test_get_children">
-<span class="sig-name descname"><span class="pre">test_get_children</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_json.TestModulJSON.test_get_children" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="tests.test_model_json.TestModulJSON.test_get_node">
-<span class="sig-name descname"><span class="pre">test_get_node</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_json.TestModulJSON.test_get_node" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="tests.test_model_json.TestModulJSON.test_init_class">
-<span class="sig-name descname"><span class="pre">test_init_class</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_json.TestModulJSON.test_init_class" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="tests.test_model_json.TestModulJSON.test_open_database">
-<span class="sig-name descname"><span class="pre">test_open_database</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_json.TestModulJSON.test_open_database" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="tests.test_model_json.TestModulJSON.test_save_tree">
-<span class="sig-name descname"><span class="pre">test_save_tree</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_json.TestModulJSON.test_save_tree" title="Permalink to this definition">¶</a></dt>
-<dd><p>Test of saving and deleting database.</p>
+<dt class="sig sig-object py" id="tests.test_model_sqlite.TestModulSQLite.test_create_database">
+<span class="sig-name descname"><span class="pre">test_create_database</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_sqlite.TestModulSQLite.test_create_database" title="Permalink to this definition">¶</a></dt>
+<dd><p>This test should be executed under root privileges.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="tests.test_model_json.TestModulJSON.test_update_node">
-<span class="sig-name descname"><span class="pre">test_update_node</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_json.TestModulJSON.test_update_node" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="tests.test_model_sqlite.TestModulSQLite.test_delete_datebase">
+<span class="sig-name descname"><span class="pre">test_delete_datebase</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_sqlite.TestModulSQLite.test_delete_datebase" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="tests.test_model_sqlite.TestModulSQLite.test_delete_node">
+<span class="sig-name descname"><span class="pre">test_delete_node</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_sqlite.TestModulSQLite.test_delete_node" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="tests.test_model_sqlite.TestModulSQLite.test_get_children">
+<span class="sig-name descname"><span class="pre">test_get_children</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_sqlite.TestModulSQLite.test_get_children" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="tests.test_model_sqlite.TestModulSQLite.test_get_node">
+<span class="sig-name descname"><span class="pre">test_get_node</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_sqlite.TestModulSQLite.test_get_node" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="tests.test_model_sqlite.TestModulSQLite.test_init_class">
+<span class="sig-name descname"><span class="pre">test_init_class</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_sqlite.TestModulSQLite.test_init_class" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="tests.test_model_sqlite.TestModulSQLite.test_open_database">
+<span class="sig-name descname"><span class="pre">test_open_database</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_sqlite.TestModulSQLite.test_open_database" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="tests.test_model_sqlite.TestModulSQLite.test_update_node">
+<span class="sig-name descname"><span class="pre">test_update_node</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tests.test_model_sqlite.TestModulSQLite.test_update_node" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
@@ -326,8 +321,7 @@
 <li class="toctree-l2"><a class="reference internal" href="common.html">common module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="exceptions.html">exceptions module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="model_interface.html">model_interface module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="model_json.html">model_json module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="my_nodes.html">my_nodes module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="model_sqlite.html">model_sqlite module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="presenter.html">presenter module</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">tests package</a></li>
 <li class="toctree-l2"><a class="reference internal" href="time_convert.html">time_convert module</a></li>
