@@ -70,20 +70,20 @@ class ModelSQLite:
     def add_node(self, attr_dict: dict, node_type: bool):
         """Add a folder or url to the SQLite tree.
         DB connection and cursor have established by db create or open methods.
-        Common  dict fields (in the 'tree' table order) -
+
+        Common  dict fields (in the 'tree' table order):
             guid  - to fill if empty or omitted, primary key
             parent_guid - to find from parent_name field and fill,
             id_no - set 0 if it's omitted otherwise copy,
             name - no changes, simply copy,
             date_added - to fill if empty or omitted
+            node_type BOOL - from node_type param.
 
-            node_type BOOL - from node_type param,
-
-        Folder dict fields (in the 'folder' table order) -
+        Folder dict fields (in the 'folder' table order):
             node_id - fill from 'guid' of 'tree' table, primary and foreign key
             date_modified to fill if empty or omitted
 
-        Url dict fields (in the 'url' table order) -
+        Url dict fields (in the 'url' table order):
             node_id - fill from 'guid' of 'tree' table, primary and foreign key
             url - set empty if it is omitted otherwise copy
             icon - set empty if it is omitted otherwise copy
@@ -170,6 +170,7 @@ class ModelSQLite:
 
     def update_node(self, name: str, attr_dict: dict):
         """Update a folder or url of the SQLite database.
+
         User can update:
             name - for folder and url nodes
             url, icon, keywords - for url nodes
@@ -411,21 +412,5 @@ class ModelSQLite:
         self.conn = None  # type: ignore[assignment]#  set flag not_connected
         self.db_name = ''  # clear name of the current db
         os.remove(name)  # remove the db file
-
-    # ---- convertors section ----
-    def convert_chrome(self, filename: str) -> tuple[bool, str]:
-        """Convert Chrome bookmark JSON filename to the current tree. Return (True/False, error message)
-
-        :param filename: Google bookmark filename to convert
-        :return: (True, empty string)  or (False, error message)
-        """
-        return True, ''
-    def convert_mozilla(self, filename: str) -> tuple[bool, str]:
-        """Convert Mozilla bookmark filename to the current tree. Return (True/False, error message).
-
-        :param filename: Mozilla bookmark filename to convert
-        :return: (True, empty string)  or (False, error message)
-        """
-        return True, ''
 
 
