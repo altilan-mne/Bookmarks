@@ -64,6 +64,39 @@ class ModelMongod:
         :param node_type: True for folder adding, False for url
         :return: nothing
         """
+        add_doc = {}  # additional fields for the new node? folder or url
+        # find 'parent_guid' from parent_name
+        parent_guid = self.bm.find_one({'name': attr_dict['parent_name']},
+                                       {'_id': True})  # return a dictionary
+        dates = datetime.utcnow()  # date_added and date_modified for roots
+        if 'id_no' in attr_dict:
+            id_no = attr_dict['id_no']  # copy if exists
+        else:
+            id_no = 0
+        common_doc = {'_id': uuid.uuid4(),
+                      'name': attr_dict['name'],
+                      'parent_guid': parent_guid['_id'],
+                      'date_added': dates,
+                      'id_no': id_no}  # common dictionary for mongo doc
+        if node_type:
+            # folder, create add_doc for the new folder
+            add_doc = {'date_modified': dates, 'children': []}
+        else:
+            # url, create add_doc for the new url
+            add_doc['url'] = attr_dict['url']
+            add_doc['icon'] = attr_dict['icon']
+            add_doc['keywords'] = attr_dict['keywords']
+
+        # concatenate common and additional docs and insert the new node
+        full_doc = common_doc | add_doc
+        result = self.bm.insert_one(full_doc)
+
+        # add {name: _id} of the child to the parent children list
+        self.bm.update_one(parent_guid,
+                           {'$push':
+                               {'children': {common_doc['name']: common_doc['_id']}}
+                           }
+                           )
 
     def update_node(self, name: str, attr_dict: dict):
         """Update a folder or url of the internal tree and save it into the file
@@ -126,6 +159,12 @@ class ModelMongod:
         :param name: name and filename of the deleting database
         :return: nothing
         """
+        # check if database 'name' exists on the connected server
+        if name not in self.client.list_database_names():
+            raise FileNotFoundError(name)  # database 'name' does not exist on the server
+        # create connection and open collection
+        self.db = self.client[name]  # database
+        self.bm = self.db[COLLECTION_NAME]  # collection
 
     def delete_database(self, name):
         """Delete the database file.
@@ -135,6 +174,13 @@ class ModelMongod:
         :param name: name and filename of the deleting database
         :return: nothing
         """
+        # check if database 'name' exists on the connected server
+        if name not in self.client.list_database_names():
+            raise FileNotFoundError(name)  # database 'name' does not exist on the server
+        self.client.drop_database(name)  # delete database 'name' from the server
+        self.db = None  # database name is undefined
+        self.bm = None  # collection name is undefined
+
 
 
 
