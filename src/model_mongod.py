@@ -29,6 +29,8 @@ import uuid
 import typing as t
 
 from time_convert import stamp_to_object, stamp_to_string
+from time_convert import stamp_to_object
+import exceptions
 
 LOCAL_URI = 'localhost:27017'  # local connection for the mongod
 DB_NAME = 'bookmarks'  # database name by default
@@ -56,9 +58,15 @@ class ModelMongod:
         :param node_name: name of a node
         :return: True/False, tuple of child's names/empty tuple
         """
+        node_content = self.get_node(node_name)  # get node's fields as a dict
+        if 'children' not in node_content:
+            # this is an url
+            return False, ()
+        # this is a folder, return a list of child names, which can be empty
+        return True, tuple(node_content['children'])
 
     def add_node(self, attr_dict: dict, node_type: bool):
-        """Add a folder or url to the tree and save the tree into the file
+        """Add a folder or url to the collection.
 
         :param attr_dict: dictionary with initial node attributes
         :param node_type: True for folder adding, False for url
@@ -68,7 +76,7 @@ class ModelMongod:
         # find 'parent_guid' from parent_name
         parent_guid = self.bm.find_one({'name': attr_dict['parent_name']},
                                        {'_id': True})  # return a dictionary
-        dates = datetime.utcnow()  # date_added and date_modified for roots
+        dates = datetime.utcnow()  # date_added and date_modified for nodes
         if 'id_no' in attr_dict:
             id_no = attr_dict['id_no']  # copy if exists
         else:
@@ -93,21 +101,74 @@ class ModelMongod:
 
         # add {name: _id} of the child to the parent children list
         self.bm.update_one(parent_guid,
-                           {'$push':
-                               {'children': {common_doc['name']: common_doc['_id']}}
-                           }
+                            {'$push':
+                                {'children':
+                                    {common_doc['name']: common_doc['_id']}
+                                }
+                            }
                            )
 
     def update_node(self, name: str, attr_dict: dict):
-        """Update a folder or url of the internal tree and save it into the file
+        """Update a folder or url of the collection.
+        User may update the following fields:
+            - for folders: name
+            - for urls: name, url, icon, keywords
+        Other fields can be updated by internal routines.
+        Field 'date_modified' for the parent folder updates automatically, if any child was updates.
+        Name of the child object in the children list of the parent node will update if child name was changed.
+        Field 'children' can be modified only within this Model Mongo DB module.
+        Field '_id' can not be updated.
+        Full validation of incoming fields and database schema was not implemented in this version.
 
         :param name: updating node name
         :param attr_dict: dictionary with the updating fields
         :return: nothing
         """
+        if not attr_dict:
+            return  # return if empty attr_dict
+
+        # check if the node exists
+        res, children = self.get_children(name)  # raise NodeNotExists if the node does not exist
+        # if we are here that node is in the collection, trim invalid fields if they present
+        if res:
+            # this is a folder, it is possible to change 'name' only
+            update_dict = {k: v for (k, v) in attr_dict.items() if k == 'name' }  # only 'name'
+        else:
+            # this is an url, name, url, icon, keywords allowed only
+            update_dict = {k: v for (k, v) in attr_dict.items()
+                           if k in ('name', 'url', 'icon', 'keywords')}
+        # update the document, return _id, old name and parent guid for the updated node
+        old_fields = self.bm.find_one_and_update(
+                    {'name': name},  # find condition
+                    {'$set': update_dict},  # updated fields
+                    {'name': True, '_id': True, 'parent_guid': True}  # projection of the returned doc
+        )
+        new_date = datetime.utcnow()  # new date_modified of parent folder
+        # sync the parent folder of the updated document: date_modified and probably children list
+        if 'name' in update_dict:
+            # name was changed, update 'date_modified' and children list in one operation
+            self.bm.update_one(
+                {'_id': old_fields['parent_guid']},  # filter pos arg, find parent node by its _id
+                {'$set': {  # update pos arg, update 2 items, k: v pairs separated by comma
+                            'date_modified': new_date,  # a new date_modified of parent folder
+                            'children.$[elem]':
+                            {update_dict['name']: old_fields['_id']}  # put {'new name': _id} pair to the children array
+                         }
+                },
+                array_filters=[{'elem':  # key args with array filter to find what we change
+                                    {old_fields['name']: old_fields['_id']}  # filter by old child object
+                              }]
+            )
+        else:
+            # name is unchanged, update parent 'date_modified' only
+            self.bm.update_one(
+                {'_id': old_fields['parent_guid']},  # filter pos arg, find parent node by its _id
+                {'$set': {'date_modified': new_date}}  # a new date_modified of parent folder
+            )
 
     def delete_node(self, name: str):
-        """Delete a node from the current tree.
+        """Delete the node 'name' from the collection.
+         Delete object from children list of the parent node.
 
         :raises NodeNotExists: if node_name does not exist
         :raises FolderNotEmpty: if node_name folder is not empty
@@ -115,7 +176,7 @@ class ModelMongod:
         :param name: node name to delete
         :return: nothing
         """
-
+        # check if the node exists
     def get_node(self, name: str) -> dict:
         """Get a node content.
         Replace children objects with their names for folder children list
@@ -123,6 +184,28 @@ class ModelMongod:
         :param name: node name
         :return: dictionary {field_name: field_value} of the node
         """
+        # fetch node's fields from collection if it exist
+        node_content = self.bm.find_one({'name': name})
+        if node_content is None:
+            raise exceptions.NodeNotExists(name)  # error exception
+        # ok, the node exists
+        # convert common fields first
+        node_content['guid'] = str(node_content.pop('_id'))
+        node_content['parent_guid'] = str(node_content['parent_guid'])
+        node_content['date_added'] = datetime.isoformat(node_content['date_added'],
+                                                        timespec='seconds')
+        # convert folder's fields
+        if 'children' in node_content:
+            node_content['date_modified'] = datetime.isoformat(node_content['date_modified'],
+                                                               timespec='seconds')
+
+            # make a list comprehension for the first keys (=names) of child node objects
+            children = [next(iter(child)) for child in node_content['children']]
+            node_content['children'] = children  # return a list of names, not objects
+
+        return node_content
+
+
 
     # ---- database section ----
     def create_database(self, name: str):
