@@ -206,7 +206,6 @@ class TestModelMongod:
         assert len(str(parent_dates['date_modified'])) == 26  # milliseconds are not trimmed
         assert parent_dates['date_added'] < parent_dates['date_modified']  # parent is modified later then created
 
-
         # update Url1, keep node name, add the junk field 'wrong'
         name = 'Url1'
         attr_dict = {'url': 'new_url', 'icon': 'new_icon',
@@ -226,12 +225,47 @@ class TestModelMongod:
         assert len(str(parent_dates['date_modified'])) == 26  # milliseconds are not trimmed
         assert parent_dates['date_added'] < parent_dates['date_modified']  # parent is modified later then created
 
-
         # update name of Url1 with URL1
         attr_dict = {'name': 'URL1'}
         self.md.update_node(name, attr_dict)
         result = self.md.bm.find_one({'name': attr_dict['name']})
         assert result['name'] == attr_dict['name']
 
-    # delete nodes
-    #     self.md.db.drop_collection('bm')
+    def test_delete_node(self):
+        """Test of node deleting."""
+        # try delete non-existing node
+        try:
+            self.md.delete_node('unknown')
+        except exceptions.NodeNotExists as e:
+            print('\nException NodeNotExists raised successfully', e, file=sys.stderr)
+
+        # try delete non-empty folder 'FOLDER1'
+        try:
+            self.md.delete_node('FOLDER1')
+        except exceptions.FolderNotEmpty as e:
+            print('\nException FolderNotEmpty raised successfully', e, file=sys.stderr)
+
+        # delete 'URL1' node
+        self.md.delete_node('URL1')
+        # check if URL1 is removed from the collection
+        res = self.md.bm.find_one({'name': 'URL1'})
+        assert res is None
+        # check if URL1 is deleted from children list of the FOLDER1
+        res = self.md.bm.find_one({'name': 'FOLDER1'})
+        assert len(res['children']) == 1  # only Url2 presents in the list
+
+        # delete Url2 to clear FOLDER1
+        self.md.delete_node('Url2')
+
+        # now we can delete empty FOLDER1
+        self.md.delete_node('FOLDER1')
+        # check if FOLDER1 is removed from the collection
+        res = self.md.bm.find_one({'name': 'FOLDER1'})
+        assert res is None
+        # check if FOLDER1 is deleted from children list of the 'roots'
+        res = self.md.bm.find_one({'name': 'roots'})
+        assert len(res['children']) == 0  # only Url2 presents in the list
+
+        # delete database 'test_db' and close connection
+        self.md.client.drop_database('test_db')
+        self.md.client.close()

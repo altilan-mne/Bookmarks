@@ -48,6 +48,7 @@ class ModelMongod:
         self.client = MongoClient(LOCAL_URI, uuidRepresentation='standard')
         self.db = None  # name of the database
         self.bm = None  # name of the collection
+        self.cwd = None # for compatibility with the Model interface
 
     # ---- nodes section ----
     def get_children(self, node_name: str) -> tuple[bool, tuple[str, ...]]:
@@ -177,6 +178,25 @@ class ModelMongod:
         :return: nothing
         """
         # check if the node exists
+        res, children = self.get_children(name)  # raise NodeNotExists if the node does not exist
+        # if we are here that node is in the collection, trim invalid fields if they present
+        if res and children:
+            # non-empty folder can not be deleted
+            raise exceptions.FolderNotEmpty(name)  # error
+        # an url or empty folder found, delete the node from the collection
+        del_fields = self.bm.find_one_and_delete(
+                    {'name': name},  # find condition
+                    {'name': True, 'parent_guid': True}  # returned projection
+        )
+        # delete node's object from parent children list
+        self.bm.update_one(
+                        {'_id': del_fields['parent_guid']},  # find parent node
+                        {'$pull':
+                            {'children': {'$eq':
+                                {del_fields['name']: del_fields['_id']}
+                            }}
+                        }
+        )
     def get_node(self, name: str) -> dict:
         """Get a node content.
         Replace children objects with their names for folder children list
