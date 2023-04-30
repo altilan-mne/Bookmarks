@@ -67,8 +67,6 @@ class TestModelMongod:
         # create a new db
         db_name = 'test_db'
         self.md.create_database(db_name)
-        # create another db
-        self.md.create_database('another')
 
         # open existing database
         self.md.open_database(db_name)
@@ -81,9 +79,6 @@ class TestModelMongod:
         assert result['children'] == []
         assert result['date_added'] == result['date_modified']
 
-        # drop unnecessary db
-        self.md.client.drop_database('another')
-
     def test_add_node(self ):
         """Test of a node inserting.
         Database with 'roots' is opened."""
@@ -94,7 +89,11 @@ class TestModelMongod:
         # create attr_dict for the new url
         new_url = {'name': 'Url1', 'parent_name': 'Folder1', 'id_no': 2,
                    'url': 'URL', 'icon': 'ICON', 'keywords': 'KEYWORDS'}
-        self.md.add_node(new_url, node_type=False)  # create url node
+        self.md.add_node(new_url, node_type=False)  # create Url1 node
+        # create attr_dict for the new url
+        new_url2 = {'name': 'Url2', 'parent_name': 'Folder1', 'id_no': 22,
+                   'url': 'uuu', 'icon': 'iii', 'keywords': 'kkk'}
+        self.md.add_node(new_url2, node_type=False)  # create Url2 node
 
         # get guid of 'roots'
         roots_guid = self.md.bm.find_one({'name': 'roots'},
@@ -104,10 +103,16 @@ class TestModelMongod:
                                                 {'_id': True}, )  # return a dictionary
 
         # get fields of the Url1
-        res_url = self.md.bm.find_one({'name': 'Url1'})
+        res_children = self.md.bm.find_one({'children.name': 'Url1'},
+                                      {'_id': False, 'children': True}
+        )  # get children list only
+        res_url = [obj for obj in res_children['children'] if obj['name'] == 'Url1'][0]
+        # for obj in res_child_list['children']:
+        #     if obj['name'] == 'Url1':
+        #         res_url = obj
+
         assert res_url['name'] == new_url['name']
         assert len(str(res_url['_id'])) == 36
-        assert res_url['parent_guid'] == folder_guid['_id']
         assert res_url['id_no'] == new_url['id_no']
         assert res_url['url'] == new_url['url']
         assert res_url['icon'] == new_url['icon']
@@ -119,8 +124,35 @@ class TestModelMongod:
         assert len(str(res_folder['_id'])) == 36
         assert res_folder['parent_guid'] == roots_guid['_id']
         assert res_folder['id_no'] == 0
-        assert res_folder['children'] == [{res_url['name']: res_url['_id']}]
-        assert res_folder['date_added'] == res_folder['date_modified']
+        assert len(res_folder['children']) == 2  # 2 children: Url1, Url2
+        assert res_folder['date_added'] < res_folder['date_modified']  # date_modified changed
+
+        # delete Url2 for next tests
+        res = self.md.bm.update_one({'children.name': 'Url2'},
+                                    {'$pull':
+                                        {'children':
+                                            {'name': 'Url2'}
+                                        }
+                                    }
+        )
+        # restore date_modified field of the Folder1
+        res = self.md.bm.update_one({'name': 'Folder1'},
+                                    {'$set':
+                                         {'date_modified': res_folder['date_added']}
+                                    }
+        )
+    def test_get_child_folders(self):
+        """Test internal method for getting child folders of the given folder."""
+        # get guid of 'roots'
+        roots_guid = self.md.bm.find_one({'name': 'roots'},
+                                         {'_id': True}, )  # return a dictionary
+        # get guid of 'Folder1'
+        folder_guid = self.md.bm.find_one({'name': 'Folder1'},
+                                          {'_id': True}, )  # return a dictionary
+
+        res = self.md._get_child_folders(roots_guid['_id'])
+        assert res == ['Folder1']
+
 
     def test_get_node(self):
         """Test of node fields getting."""
@@ -162,8 +194,9 @@ class TestModelMongod:
         assert len(node_folder['guid']) == 36
         assert node_folder['parent_guid'] == str(roots_guid['_id'])
         assert len(node_folder['date_added']) == 19
-        assert node_folder['date_modified'] == node_folder['date_added']
+        assert node_folder['date_modified'] >= node_folder['date_added']
         assert node_folder['children'] == ['Url1', 'Url2']
+
 
     def test_get_children(self):
         """Test the method to get list of children names from the node."""
@@ -192,6 +225,13 @@ class TestModelMongod:
         except exceptions.NodeNotExists as e:
             print('\nException NodeNotExists raised successfully', e, file=sys.stderr)
 
+        # restore date_modified field of the Folder1
+        res = self.md.bm.update_one({'name': 'Folder1'},
+                                    [{'$set':  # aggregation are used
+                                         {'date_modified': '$date_added'}
+                                    }]
+        )
+
         # update Folder1
         name = 'Folder1'
         attr_dict = {'name': 'FOLDER1', 'junk': 'JUNK'}
@@ -199,12 +239,7 @@ class TestModelMongod:
         result = self.md.bm.find_one({'name': 'FOLDER1'})
         assert 'junk' not in result  # if junk field was removed
         assert result['name'] == 'FOLDER1'
-        # get date fields of the parent node
-        parent_dates = self.md.bm.find_one ({'_id': result['parent_guid']},
-                                            {'_id': False, 'date_added': True, 'date_modified': True}
-        )
-        assert len(str(parent_dates['date_modified'])) == 26  # milliseconds are not trimmed
-        assert parent_dates['date_added'] < parent_dates['date_modified']  # parent is modified later then created
+        assert result['date_added'] == result['date_modified']  # date_modified is not changed
 
         # update Url1, keep node name, add the junk field 'wrong'
         name = 'Url1'
@@ -212,14 +247,18 @@ class TestModelMongod:
                      'keywords': 'k1, k2, k3', 'wrong': 'ERROR',
                      }
         self.md.update_node(name, attr_dict)
-        result = self.md.bm.find_one({'name': name})
+        qry = self.md.bm.find_one({'children.name': name},
+                                     {'_id': False,
+                                      'children.$': True}
+        )
+        result = qry['children'][0]  # get the clear dict without the dict key
         assert 'wrong' not in result  # if junk field was removed
         assert result['name'] == 'Url1'
         assert result['url'] == attr_dict['url']
         assert result['icon'] == attr_dict['icon']
         assert result['keywords'] == attr_dict['keywords']
         # get date fields of the parent node
-        parent_dates = self.md.bm.find_one ({'_id': result['parent_guid']},
+        parent_dates = self.md.bm.find_one ({'children.name': 'Url1'},
                                             {'_id': False, 'date_added': True, 'date_modified': True}
         )
         assert len(str(parent_dates['date_modified'])) == 26  # milliseconds are not trimmed
@@ -228,7 +267,11 @@ class TestModelMongod:
         # update name of Url1 with URL1
         attr_dict = {'name': 'URL1'}
         self.md.update_node(name, attr_dict)
-        result = self.md.bm.find_one({'name': attr_dict['name']})
+        qry = self.md.bm.find_one({'children.name': 'URL1'},
+                                  {'_id': False,
+                                   'children.$': True}
+        )
+        result = qry['children'][0]  # get the clear dict without the dict key
         assert result['name'] == attr_dict['name']
 
     def test_delete_node(self):
@@ -245,6 +288,13 @@ class TestModelMongod:
         except exceptions.FolderNotEmpty as e:
             print('\nException FolderNotEmpty raised successfully', e, file=sys.stderr)
 
+        # restore date_modified field of the FOLDER1
+        res = self.md.bm.update_one({'name': 'FOLDER1'},
+                                    [{'$set':  # aggregation are used
+                                          {'date_modified': '$date_added'}
+                                    }]
+        )
+
         # delete 'URL1' node
         self.md.delete_node('URL1')
         # check if URL1 is removed from the collection
@@ -253,6 +303,7 @@ class TestModelMongod:
         # check if URL1 is deleted from children list of the FOLDER1
         res = self.md.bm.find_one({'name': 'FOLDER1'})
         assert len(res['children']) == 1  # only Url2 presents in the list
+        assert res['date_added'] < res['date_modified']  # date_modified changed
 
         # delete Url2 to clear FOLDER1
         self.md.delete_node('Url2')

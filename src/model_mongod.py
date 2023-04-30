@@ -1,25 +1,26 @@
-"""A Model part of Bookmark Manager implemented with Mongo DB (document type).
-There are 2 types of nodes: folder and url (as leaf node).
-Datastorage schema: tree with parent field and children list for folder.
-One document for each node, there are common fields and there are specific fields.
+"""A Model part of Bookmark Manager (BM) implemented with Mongo DB (document type).
+There are 2 types of nodes: folder and url (leaf node).
+Version 3.1 has a new db data structure optimized for atomic (only one document at once) write operation.
+This is preparation for the transition to a distributed BM model.
+Url node objects placed to the children array of the parent folder node (data denormalization).
+Folder nodes are still documents, as they were in the first version.
+Bookmarks tree has a complex structure in the new version.
+There are common fields and there are specific fields.
 Common fields:
     _id: GUID (UUID4) of the node as 128-bit value (not as a string)
     name: str - name of the node, root of tree names 'roots'
-    parent_guid: GUID of the parent node, 'roots' has Null(None for Python) value
     date_added: Date - timestamp when the node was created, internal Mongo format (N of ms from Unix epoch)
     id_no: int32 - legacy from Chrome bookmarks
+Parent guid for an url node excluded from urls fields.
 Folder specific fields:
-    children: array of objects - list of children nodes, [{name: 'name', _id: 'GUID'},,,]
+    parent_guid: GUID of the parent node, 'roots' has Null(None for Python) value
+    children: array of objects - list of child url nodes, which are embedded documents
     date_modified: Date - timestamp when the folder was modified, internal Mongo format
 Url specific fields:
     url: str - URL reference of the bookmark node
     icon: str - icon data of the WEB page for the referenced URL
     keywords: array of strings - list of keywords (tags) of the referenced URL
-Version 1 is prepared for a local Mongo instance (mongod) for testing purposes.
-The database schema assumes the use of a multi-server application in the following implementation.
-
-
-
+Version 3.1 is prepared for a local Mongo instance (mongod) for testing purposes.
 """
 
 from pymongo import MongoClient
@@ -31,6 +32,7 @@ import typing as t
 from time_convert import stamp_to_object, stamp_to_string
 from time_convert import stamp_to_object
 import exceptions
+from common import URL_FIELDS, FOLDER_FIELDS  # fields enabled to update
 
 LOCAL_URI = 'localhost:27017'  # local connection for the mongod
 DB_NAME = 'bookmarks'  # database name by default
@@ -48,26 +50,57 @@ class ModelMongod:
         self.client = MongoClient(LOCAL_URI, uuidRepresentation='standard')
         self.db = None  # name of the database
         self.bm = None  # name of the collection
-        self.cwd = None # for compatibility with the Model interface
+        self.cwd = None  # for compatibility with the Model interface
 
     # ---- nodes section ----
+    def _get_child_folders(self, folder_id: str) -> list[str]:
+        """Return a list of child folders for the given folder.
+        Search in the collection for the folders on their 'parent_guid'.
+
+        :param folder_id:
+        :return:
+        """
+        children = self.bm.find({'parent_guid': folder_id},  # search condition
+                           {'_id': False, 'name': True}  # fetch names only
+        )
+        return [child['name'] for child in children]  # get a list from database cursor
+
     def get_children(self, node_name: str) -> tuple[bool, tuple[str, ...]]:
         """Get a list of child names of the node.
+        Duplicate partially the code of the get_node() for querying children information only.
+        It reduces server traffic.
 
         :exceptions: NodeNotExists if node_name does not exist
 
         :param node_name: name of a node
         :return: True/False, tuple of child's names/empty tuple
         """
-        node_content = self.get_node(node_name)  # get node's fields as a dict
-        if 'children' not in node_content:
-            # this is an url
-            return False, ()
-        # this is a folder, return a list of child names, which can be empty
-        return True, tuple(node_content['children'])
+        # search the folder 'node_name' in the collection
+        node_content = self.bm.find_one({'name': node_name},  # search condition
+                         {'_id': True, 'children': True}  # get _id and children list only
+        )
+        if node_content is not None:
+            # folder 'name' found
+            # make a list comprehension for the names of child url objects
+            children = [child['name'] for child in node_content['children']]
+            # 'children' has child url objects but has no child folder names
+            children.extend(self._get_child_folders(node_content['_id']))  # add names of child folders
+            return True, tuple(children)  # return folder flag True end children list
+        else:
+            # node 'name' is an url or does not exist
+            # search 'name' among urls
+            res = self.bm.find_one({'children.name': node_name},
+                                   {'_id': True}  # no value needed, return something small to reduce traffic
+            )
+            if res is None:
+                # this node does not exist
+                raise exceptions.NodeNotExists(node_name)  # error exception
+            # url 'node_name' found, it has no children
+            return False, ()  # return url flag False and empty tuple
 
     def add_node(self, attr_dict: dict, node_type: bool):
         """Add a folder or url to the collection.
+        Update 'date_modified' field of the parent folder if an url will be added
 
         :param attr_dict: dictionary with initial node attributes
         :param node_type: True for folder adding, False for url
@@ -75,8 +108,9 @@ class ModelMongod:
         """
         add_doc = {}  # additional fields for the new node? folder or url
         # find 'parent_guid' from parent_name
+        # search within folder docs only!
         parent_guid = self.bm.find_one({'name': attr_dict['parent_name']},
-                                       {'_id': True})  # return a dictionary
+                                       {'_id': True})  # return a {key, value} pair
         dates = datetime.utcnow()  # date_added and date_modified for nodes
         if 'id_no' in attr_dict:
             id_no = attr_dict['id_no']  # copy if exists
@@ -84,92 +118,90 @@ class ModelMongod:
             id_no = 0
         common_doc = {'_id': uuid.uuid4(),
                       'name': attr_dict['name'],
-                      'parent_guid': parent_guid['_id'],
                       'date_added': dates,
                       'id_no': id_no}  # common dictionary for mongo doc
         if node_type:
             # folder, create add_doc for the new folder
-            add_doc = {'date_modified': dates, 'children': []}
+            add_doc = {'date_modified': dates,
+                       'parent_guid': parent_guid['_id'],
+                       'children': []}
         else:
-            # url, create add_doc for the new url
-            add_doc['url'] = attr_dict['url']
-            add_doc['icon'] = attr_dict['icon']
-            add_doc['keywords'] = attr_dict['keywords']
+            # url, create add_doc for the new url: copy or empty string
+            if 'url' in attr_dict:
+                add_doc['url'] = attr_dict['url']
+            else:
+                add_doc['url'] = ''
+            if 'icon' in attr_dict:
+                add_doc['icon'] = attr_dict['icon']
+            else:
+                attr_dict['icon'] = ''
+            if 'keywords' in attr_dict:
+                add_doc['keywords'] = attr_dict['keywords']
+            else:
+                attr_dict['keywords'] = ''
 
         # concatenate common and additional docs and insert the new node
         full_doc = common_doc | add_doc
-        result = self.bm.insert_one(full_doc)
-
-        # add {name: _id} of the child to the parent children list
-        self.bm.update_one(parent_guid,
-                            {'$push':
-                                {'children':
-                                    {common_doc['name']: common_doc['_id']}
-                                }
-                            }
-                           )
+        if node_type:
+            # insert folder node to the collection
+            result = self.bm.insert_one(full_doc)  # insert a folder is atomic (one doc operation)
+        else:
+            # add child url doc to the parent children list
+            self.bm.update_one(parent_guid,
+                               {'$set': {'date_modified': dates},  # update modify timestamp
+                                '$push': {'children': full_doc}  # add new url object
+                               }
+            )  # insert an url is also atomic (one doc operation)
 
     def update_node(self, name: str, attr_dict: dict):
-        """Update a folder or url of the collection.
+        """Update a folder or url of the bookmarks' database.
+        Update operation is applied for one document only tp preserve atomic condition.
         User may update the following fields:
             - for folders: name
             - for urls: name, url, icon, keywords
-        Other fields can be updated by internal routines.
-        Field 'date_modified' for the parent folder updates automatically, if any child was updates.
-        Name of the child object in the children list of the parent node will update if child name was changed.
+        Other fields can be updated by internal routines only
+        Field 'date_modified' of the parent folder updates automatically, if any child url was updated.
         Field 'children' can be modified only within this Model Mongo DB module.
         Field '_id' can not be updated.
-        Full validation of incoming fields and database schema was not implemented in this version.
+        Full validation of the database schema was not implemented in this version.
 
         :param name: updating node name
         :param attr_dict: dictionary with the updating fields
         :return: nothing
         """
         if not attr_dict:
-            return  # return if empty attr_dict
+            return  # return if attr_dict parameter is empty
 
         # check if the node exists
-        res, children = self.get_children(name)  # raise NodeNotExists if the node does not exist
-        # if we are here that node is in the collection, trim invalid fields if they present
-        if res:
-            # this is a folder, it is possible to change 'name' only
-            update_dict = {k: v for (k, v) in attr_dict.items() if k == 'name' }  # only 'name'
+        node_type, children = self.get_children(name)  # raise NodeNotExists if the node does not exist
+        # if we are here then the node exists
+        if node_type:
+            # this is a folder
+            update_dict = {k: v for (k, v) in attr_dict.items() if k in FOLDER_FIELDS }  # folder fields only
+            # update the document e.g. folder, date_modified of the parent folder remains unchanged
+            res = self.bm.update_one(
+                {'name': name},  # find condition
+                {'$set': update_dict}  # updated fields
+            )  # one single-document write operation is atomic
         else:
             # this is an url, name, url, icon, keywords allowed only
-            update_dict = {k: v for (k, v) in attr_dict.items()
-                           if k in ('name', 'url', 'icon', 'keywords')}
-        # update the document, return _id, old name and parent guid for the updated node
-        old_fields = self.bm.find_one_and_update(
-                    {'name': name},  # find condition
-                    {'$set': update_dict},  # updated fields
-                    {'name': True, '_id': True, 'parent_guid': True}  # projection of the returned doc
-        )
-        new_date = datetime.utcnow()  # new date_modified of parent folder
-        # sync the parent folder of the updated document: date_modified and probably children list
-        if 'name' in update_dict:
-            # name was changed, update 'date_modified' and children list in one operation
-            self.bm.update_one(
-                {'_id': old_fields['parent_guid']},  # filter pos arg, find parent node by its _id
-                {'$set': {  # update pos arg, update 2 items, k: v pairs separated by comma
-                            'date_modified': new_date,  # a new date_modified of parent folder
-                            'children.$[elem]':
-                            {update_dict['name']: old_fields['_id']}  # put {'new name': _id} pair to the children array
-                         }
-                },
-                array_filters=[{'elem':  # key args with array filter to find what we change
-                                    {old_fields['name']: old_fields['_id']}  # filter by old child object
-                              }]
-            )
-        else:
-            # name is unchanged, update parent 'date_modified' only
-            self.bm.update_one(
-                {'_id': old_fields['parent_guid']},  # filter pos arg, find parent node by its _id
-                {'$set': {'date_modified': new_date}}  # a new date_modified of parent folder
-            )
+            update_dict = {'children.$.' + k: v for (k, v) in attr_dict.items() if k in URL_FIELDS}  # url fields only
+            update_dict['date_modified'] = datetime.utcnow()  # include new 'date_modified' to the mongodb expression
+            # update operator
+            res = self.bm.update_one(
+                {'children.name': name},  # find condition
+                # expression in the dict: name, url, icon, keywords fields of embedded url as 'children.$.key': value
+                # and 'date_modified: new current timestamp for parent folder
+                {'$set': update_dict}
+            )  # one single-document write operation is atomic
 
     def delete_node(self, name: str):
         """Delete the node 'name' from the collection.
-         Delete object from children list of the parent node.
+        Delete only one document, this is an atomic operation.
+        Delete un url by removing its object from the children list of the parent folder.
+        Update 'date_modified' of the parent folder after url deleting.
+        Delete un folder (non-empty) by removing the folder document from the collection.
+        After the folder is deleted, the parent date_modified field remains unchanged.
 
         :raises NodeNotExists: if node_name does not exist
         :raises FolderNotEmpty: if node_name folder is not empty
@@ -178,51 +210,62 @@ class ModelMongod:
         :return: nothing
         """
         # check if the node exists
-        res, children = self.get_children(name)  # raise NodeNotExists if the node does not exist
-        # if we are here that node is in the collection, trim invalid fields if they present
-        if res and children:
-            # non-empty folder can not be deleted
-            raise exceptions.FolderNotEmpty(name)  # error
-        # an url or empty folder found, delete the node from the collection
-        del_fields = self.bm.find_one_and_delete(
-                    {'name': name},  # find condition
-                    {'name': True, 'parent_guid': True}  # returned projection
-        )
-        # delete node's object from parent children list
-        self.bm.update_one(
-                        {'_id': del_fields['parent_guid']},  # find parent node
-                        {'$pull':
-                            {'children': {'$eq':
-                                {del_fields['name']: del_fields['_id']}
-                            }}
-                        }
-        )
+        node_type, children = self.get_children(name)  # raise NodeNotExists if the node does not exist
+        # if we are here then the node exists
+        if node_type:
+            # this is a folder, check it is empty or not
+            if children:
+                # non-empty folder
+                raise exceptions.FolderNotEmpty(name)  # error
+            # delete empty folder
+            res = self.bm.delete_one({'name': name})  # one single-document write operation is atomic
+        else:
+            # this is an url, delete it from children list and set a new 'date_modified'
+            res = self.bm.update_one(
+                {'children.name': name},  # find condition
+                {'$set': {'date_modified': datetime.utcnow()},
+                 '$pull': {'children':
+                               {'name': name}}  # children.name (dot notation) not allowed!!!
+                }
+            )  # one single-document write operation is atomic
+
     def get_node(self, name: str) -> dict:
-        """Get a node content.
-        Replace children objects with their names for folder children list
+        """Get all fields of the node.
+        For folders replace children urls in the list with their names.
 
         :param name: node name
         :return: dictionary {field_name: field_value} of the node
         """
-        # fetch node's fields from collection if it exist
+        # try to find folder 'name' from collection if it exists
         node_content = self.bm.find_one({'name': name})
-        if node_content is None:
-            raise exceptions.NodeNotExists(name)  # error exception
-        # ok, the node exists
-        # convert common fields first
-        node_content['guid'] = str(node_content.pop('_id'))
-        node_content['parent_guid'] = str(node_content['parent_guid'])
-        node_content['date_added'] = datetime.isoformat(node_content['date_added'],
-                                                        timespec='seconds')
-        # convert folder's fields
-        if 'children' in node_content:
+        if node_content:
+            # folder 'name' found
+            # make a list comprehension for the names of child url objects
+            children = [child['name'] for child in node_content['children']]
+            # 'children' has child url objects but has no child folder names
+            children.extend(self._get_child_folders(node_content['_id']))  # add names of child folders
+            node_content['children'] = children  # set a list of names instead of objects
             node_content['date_modified'] = datetime.isoformat(node_content['date_modified'],
                                                                timespec='seconds')
+            node_content['parent_guid'] = str(node_content['parent_guid'])
 
-            # make a list comprehension for the first keys (=names) of child node objects
-            children = [next(iter(child)) for child in node_content['children']]
-            node_content['children'] = children  # return a list of names, not objects
-
+        else:
+            # node 'name' is an url or does not exist
+            # search 'name' among urls
+            res = self.bm.find_one({'children.name': name},  # search in embedded urls by name
+                                   {'_id': True,
+                                    'children.$': True}  # get the found object from the parent children list
+            )
+            if res is None:
+                # this node does not exist
+                raise exceptions.NodeNotExists(name)  # error exception
+            # url 'name' found, trim the key
+            node_content = res['children'][0]  # get the clear dict without the dict key
+            node_content['parent_guid'] = str(res['_id'])  # add 'parent_guid' field from folder '_id'
+        # convert other common fields
+        node_content['guid'] = str(node_content.pop('_id'))
+        node_content['date_added'] = datetime.isoformat(node_content['date_added'],
+                                                        timespec='seconds')
         return node_content
 
 

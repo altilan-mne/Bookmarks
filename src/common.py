@@ -7,7 +7,7 @@ MenuItem = namedtuple('MenuItem', 'descr call')  # namedtuple for menu items, av
 Field = namedtuple('Field', 'name text')  # namedtuple for bookmark's field
 
 # ---- common constants ----
-VERSION = '3.0 (mongod standalone data format)'
+VERSION = '3.1 (mongod standalone data format)'
 FILL_HEADER = '-'  #: a character to fill header's line
 VALID_CHARS = "_-. /"  #: valid special characters in the names of bookmarks ot trees
 URL_FIELDS = ['name', 'url', 'icon', 'keywords']  #: enabled url fields to modify
