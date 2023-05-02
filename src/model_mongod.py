@@ -11,14 +11,17 @@ Common fields:
     name: str - name of the node, root of tree names 'roots'
     date_added: Date - timestamp when the node was created, internal Mongo format (N of ms from Unix epoch)
     id_no: int - legacy from Chrome bookmarks
+
 Folder specific fields:
     parent_guid: GUID of the parent node, 'roots' has Null(None for Python) value
     children: array of objects - list of child url nodes, which are embedded documents
     date_modified: Date - timestamp when the folder was modified, internal Mongo format
+
 Url specific fields:
     url: str - URL reference of the bookmark node
     icon: str - icon data of the WEB page for the referenced URL
     keywords: array of strings - list of keywords (tags) of the referenced URL
+
 Parent guid was excluded from url fields to avoid duplication with _id of the parent folder.
 
 JSON schema validation performs dynamic verification of the database documents.
@@ -164,6 +167,7 @@ class ModelMongod:
         User may update the following fields:
             - for folders: name
             - for urls: name, url, icon, keywords
+
         Other fields can be updated by internal routines only
         Field 'date_modified' of the parent folder updates automatically, if any child url was updated.
         Field 'children' can be modified only within this Model Mongo DB module.

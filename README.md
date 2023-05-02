@@ -1,15 +1,17 @@
 # Bookmarks
 Bookmark manager, a training project
 
-Description:
-
-A bookmark editor created and refactored during the process of Python studying.
-Program creates a tree of nodes, each node is a folder or URL.
-User can create, view and modify bookmarks, use the script bmconv.py to convert between different data formats.
+Description
+-----------
+A bookmark manager is created and refactored during the process of Python studying.
+Editor creates a tree of nodes, each node is a folder or URL.
+User can create a database from scratch or make a copy of Google Chrome bookmarks from Bookmarks.json file.
+Bookmarks can be viewed, added, updated and deleted.
 MVP pattern was implemented. Interface protocols were added to separate the Presenter and View, Model parts.
-In the future it supposes to add other implementations of View with quasi-graphics and GUI, and SQL for the Model part.
 
-Notes:
-
-Release 1.2 has an own internal database structure and keep it an JSON file.
-User interface was implemented by CLI.
+Notes
+-----
+- Release 3.1 uses standalone version Mongo DB.
+- A database tree stores normalized folder data and embedded URL nodes to achieve atomic write operations.
+- Data integrity is provided by JSON schema validation of mongodb server.
+- User interface was implemented by CLI.

@@ -12,6 +12,14 @@ tests.test\_model\_json module
    :undoc-members:
    :show-inheritance:
 
+tests.test\_model\_mongod module
+--------------------------------
+
+.. automodule:: tests.test_model_mongod
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 tests.test\_presenter module
 ----------------------------
 
