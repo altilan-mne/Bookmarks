@@ -26,7 +26,7 @@ JSON schema validation performs dynamic verification of the database documents.
 Version 3.1 is prepared for a local Mongo instance (mongod) for testing purposes.
 """
 
-from pymongo import MongoClient
+from pymongo import MongoClient, database, collection
 from datetime import datetime
 import uuid
 import typing as t
@@ -50,10 +50,10 @@ class ModelMongod:
         """
 
         # create a client and connect to the running MongoDB standalone server (mongod)
-        self.client = MongoClient(LOCAL_URI, uuidRepresentation='standard')
-        self.db = None  # name of the database
-        self.bm = None  # name of the collection
-        self.cwd = None  # for compatibility with the Model interface
+        self.client: MongoClient = MongoClient(LOCAL_URI, uuidRepresentation='standard')
+        self.db: database.Database = None  # type: ignore # database name
+        self.bm: collection.Collection = None  # type: ignore # collection name
+        self.cwd = ''  # for compatibility with the Model interface
 
     # ---- nodes section ----
     def _get_child_folders(self, folder_id: str) -> list[str]:
@@ -112,8 +112,10 @@ class ModelMongod:
         add_doc = {}  # additional fields for the new node? folder or url
         # find 'parent_guid' from parent_name
         # search within folder docs only!
-        parent_guid = self.bm.find_one({'name': attr_dict['parent_name']},
-                                       {'_id': True})  # return a {key, value} pair
+        res = self.bm.find_one({'name': attr_dict['parent_name']},
+                                                                {'_id': True})  # return a {key, value} pair
+        # get _id value explicitly because res type is ambiguous for mypy
+        parent_guid = res['_id']  # type: ignore
         dates = datetime.utcnow()  # date_added and date_modified for nodes
         if 'id_no' in attr_dict:
             id_no = attr_dict['id_no']  # copy if exists
@@ -126,7 +128,7 @@ class ModelMongod:
         if node_type:
             # folder, create add_doc for the new folder
             add_doc = {'date_modified': dates,
-                       'parent_guid': parent_guid['_id'],
+                       'parent_guid': parent_guid,
                        'children': []}
         else:
             # url, create add_doc for the new url: copy or empty string
@@ -150,7 +152,7 @@ class ModelMongod:
             result = self.bm.insert_one(full_doc)  # insert a folder is atomic (one doc operation)
         else:
             # add child url doc to the parent children list
-            self.bm.update_one(parent_guid,
+            self.bm.update_one({'_id': parent_guid},
                                {'$set': {'date_modified': dates},  # update modify timestamp
                                 '$push': {'children': full_doc}  # add new url object
                                }
@@ -224,7 +226,7 @@ class ModelMongod:
             res = self.bm.delete_one({'name': name})  # one single-document write operation is atomic
         else:
             # this is an url, delete it from children list and set a new 'date_modified'
-            res = self.bm.update_one(
+            result = self.bm.update_one(
                 {'children.name': name},  # find condition
                 {'$set': {'date_modified': datetime.utcnow()},
                  '$pull': {'children':
@@ -287,9 +289,6 @@ class ModelMongod:
         if name in self.client.list_database_names():
             raise FileExistsError(name)  # database 'name' exists on the server
 
-
-
-                  # a new database created but invisible until the first record to it
         self.db = self.client[name]  # set the new current database on server
         # create a collection (table)
         self.bm = self.db.create_collection(COLLECTION_NAME,
@@ -330,8 +329,8 @@ class ModelMongod:
         if name not in self.client.list_database_names():
             raise FileNotFoundError(name)  # database 'name' does not exist on the server
         self.client.drop_database(name)  # delete database 'name' from the server
-        self.db = None  # database name is undefined
-        self.bm = None  # collection name is undefined
+        self.db = None  # type: ignore # database name is undefined
+        self.bm = None  # type: ignore # collection name is undefined
 
 
 
@@ -340,7 +339,8 @@ def main():
     """Test Mongo DB interface.
 
     """
-    client = MongoClient(LOCAL_URI, uuidRepresentation='standard')  # create a client and connect to the running MongoDB server (mongod)
+    # create a client and connect to the running MongoDB server (mongod)
+    client = MongoClient(LOCAL_URI, uuidRepresentation='standard')  # type: ignore
     db = client.testing  # connect to the existing database
     coll = db.my_tree  # connect to the existing collection  (aka table for SQL)
 
@@ -385,8 +385,8 @@ def main():
         {'date_added': res}
     )
 
-    result = coll.find_one({'date_added': {'$exists': True}})
-    print(result)
+    res1 = coll.find_one({'date_added': {'$exists': True}})
+    print(res1)
 
     # ---- GUID (UUID) conversion ----
     guid = uuid.uuid4()  # get a random uuid in the native format
@@ -396,8 +396,8 @@ def main():
     )
     print(guid, str(guid))
     # fetch a native uuid
-    result = coll.find_one({'guid': {'$exists': True}})
-    print(result)
+    res2 = coll.find_one({'guid': {'$exists': True}})
+    print(res2)
     # convert guid from string
     str_guid = str(guid)  # string guid
     copy_guid = uuid.UUID(hex=str_guid)  # get the native guid from hex 32-digit string
