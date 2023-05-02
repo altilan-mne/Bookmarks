@@ -2,6 +2,10 @@
 
 """
 import sys
+from datetime import datetime
+import uuid
+import pymongo.errors as pme
+
 
 from model_mongod import ModelMongod
 from model_mongod import LOCAL_URI, COLLECTION_NAME
@@ -320,3 +324,136 @@ class TestModelMongod:
         # delete database 'test_db' and close connection
         self.md.client.drop_database('test_db')
         self.md.client.close()
+
+class TestValidation:
+    """Testing of JSON schema validation."""
+
+    md = ModelMongod()  # create an instance of the testing class
+
+    def test_schema_validation(self):
+        res = self.md.create_database('test_db')  # create a roots folder
+        dates = datetime.utcnow()
+        # create a correct folder dictionary
+        folder_dict = {'_id': uuid.uuid4(),
+                       'name': 'new folder',
+                       'date_added': dates,
+                       'id_no': 1,
+                       'parent_guid': uuid.uuid4(),
+                       'date_modified': dates,
+                       'children': [],
+
+        }
+        # try to insert a folder without required fields: date_modified
+        wrong_field = folder_dict.copy()
+        del wrong_field['date_modified']
+        try:
+            self.md.bm.insert_one(wrong_field)
+        except pme.WriteError as e:
+            mes1 = e.details['errmsg']
+            mes2 = e.details['errInfo']['details']['schemaRulesNotSatisfied'][0]
+            pass
+            print('\nException WriteError raised successfully:', mes1, file=sys.stderr)
+            print('Details:', mes2, file=sys.stderr)
+
+        # try to insert a folder with excessive field: 'intruded'
+        wrong_field = folder_dict.copy()
+        wrong_field['intruded'] = '!!!'
+        try:
+            self.md.bm.insert_one(wrong_field)
+        except pme.WriteError as e:
+            mes1 = e.details['errmsg']
+            mes2 = e.details['errInfo']['details']['schemaRulesNotSatisfied'][0]
+            pass
+            print('\nException WriteError raised successfully:', mes1, file=sys.stderr)
+            print('Details:', mes2, file=sys.stderr)
+
+        # insert a folder with invalid _id type: string instead binary
+        wrong_field = folder_dict.copy()
+        wrong_field['_id'] = '8e40dac0-c01f-451a-b795-91f8bfc4a478'
+        try:
+            self.md.bm.insert_one(wrong_field)
+        except pme.WriteError as e:
+            mes1 = e.details['errmsg']
+            mes2 = e.details['errInfo']['details']['schemaRulesNotSatisfied'][0]
+            pass
+            print('\nException WriteError raised successfully:', mes1, file=sys.stderr)
+            print('Details:', mes2, file=sys.stderr)
+
+        # try to update 'id_no' with wrong type value
+        try:
+            self.md.bm.update_one({'name': 'roots'},
+                                  {'$set': {'id_no': '0'}})
+        except pme.WriteError as e:
+            mes1 = e.details['errmsg']
+            mes2 = e.details['errInfo']['details']['schemaRulesNotSatisfied'][0]
+            pass
+            print('\nException WriteError raised successfully:', mes1, file=sys.stderr)
+            print('Details:', mes2, file=sys.stderr)
+
+        # try to push wrong type object onto 'children' field: string instead of an object
+        wrong_url = 'wrong url node'
+        try:
+            self.md.bm.update_one({'name': 'roots'},
+                {'$push':
+                     {'children': wrong_url}
+                }
+
+            )
+        except pme.WriteError as e:
+            mes1 = e.details['errmsg']
+            mes2 = e.details['errInfo']['details']['schemaRulesNotSatisfied'][0]
+            pass
+            print('\nException WriteError raised successfully:', mes1, file=sys.stderr)
+            print('Details:', mes2, file=sys.stderr)
+
+            # try to push wrong object onto 'children' field
+            wrong_url = {'wrong': 'wrong url node'}
+            try:
+                self.md.bm.update_one({'name': 'roots'},
+                                      {'$push':
+                                           {'children': wrong_url}
+                                      }
+                )
+            except pme.WriteError as e:
+                mes1 = e.details['errmsg']
+                mes2 = e.details['errInfo']['details']['schemaRulesNotSatisfied'][0]
+                pass
+                print('\nException WriteError raised successfully:', mes1, file=sys.stderr)
+                print('Details:', mes2, file=sys.stderr)
+
+            # create correct url dictionary
+            url_dict = {'_id': uuid.uuid4(),
+                        'name': 'new url',
+                        'date_added': dates,
+                        'id_no': 2,
+                        'url': 'new URL',
+                        'icon': 'new UCON',
+                        'keywords': 'k1 k2 k3',
+                       }
+            # insert correct url into the 'roots'
+            self.md.bm.update_one({'name': 'roots'},
+                                  {'$push':
+                                       {'children': url_dict}
+                                  }
+            )
+            # check 'roots' children if an url has been added
+            res = self.md.bm.find_one({'name': 'roots'})
+            assert len(res['children']) == 1
+
+            # try to insert the same second object
+            try:
+                self.md.bm.update_one({'name': 'roots'},
+                                      {'$push':
+                                           {'children': url_dict}
+                                       }
+                                      )
+            except pme.WriteError as e:
+                mes1 = e.details['errmsg']
+                mes2 = e.details['errInfo']['details']['schemaRulesNotSatisfied'][0]
+                pass
+                print('\nException WriteError raised successfully:', mes1, file=sys.stderr)
+                print('Details:', mes2, file=sys.stderr)
+
+
+            self.md.client.drop_database('test_db')  # delete test database
+

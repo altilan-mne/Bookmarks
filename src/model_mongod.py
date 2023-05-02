@@ -1,17 +1,16 @@
-"""A Model part of Bookmark Manager (BM) implemented with Mongo DB (document type).
-There are 2 types of nodes: folder and url (leaf node).
+"""A Model part of Bookmark Manager (BM) implemented with Mongo DB (document db model).
+There are 2 types of nodes: folders and urls (leaf node).
 Version 3.1 has a new db data structure optimized for atomic (only one document at once) write operation.
-This is preparation for the transition to a distributed BM model.
+This is preparation for the transition to the distributed model of BM.
 Url node objects placed to the children array of the parent folder node (data denormalization).
-Folder nodes are still documents, as they were in the first version.
-Bookmarks tree has a complex structure in the new version.
-There are common fields and there are specific fields.
+Folder nodes are still documents of the collection, as they were in the first version.
+
+There are common fields and there are specific fields of nodes.
 Common fields:
-    _id: GUID (UUID4) of the node as 128-bit value (not as a string)
+    _id: GUID (UUID4) of the node as 128-bit binary value (not as a string)
     name: str - name of the node, root of tree names 'roots'
     date_added: Date - timestamp when the node was created, internal Mongo format (N of ms from Unix epoch)
-    id_no: int32 - legacy from Chrome bookmarks
-Parent guid for an url node excluded from urls fields.
+    id_no: int - legacy from Chrome bookmarks
 Folder specific fields:
     parent_guid: GUID of the parent node, 'roots' has Null(None for Python) value
     children: array of objects - list of child url nodes, which are embedded documents
@@ -20,11 +19,14 @@ Url specific fields:
     url: str - URL reference of the bookmark node
     icon: str - icon data of the WEB page for the referenced URL
     keywords: array of strings - list of keywords (tags) of the referenced URL
+Parent guid was excluded from url fields to avoid duplication with _id of the parent folder.
+
+JSON schema validation performs dynamic verification of the database documents.
+
 Version 3.1 is prepared for a local Mongo instance (mongod) for testing purposes.
 """
 
 from pymongo import MongoClient
-import pymongo.errors as me
 from datetime import datetime
 import uuid
 import typing as t
@@ -33,6 +35,7 @@ from time_convert import stamp_to_object, stamp_to_string
 from time_convert import stamp_to_object
 import exceptions
 from common import URL_FIELDS, FOLDER_FIELDS  # fields enabled to update
+from schema_mongo import folder_json_schema  # JSON schema of validation
 
 LOCAL_URI = 'localhost:27017'  # local connection for the mongod
 DB_NAME = 'bookmarks'  # database name by default
@@ -284,10 +287,13 @@ class ModelMongod:
         if name in self.client.list_database_names():
             raise FileExistsError(name)  # database 'name' exists on the server
 
-        # a new database created but invisible until the first record to it
+
+
+                  # a new database created but invisible until the first record to it
         self.db = self.client[name]  # set the new current database on server
         # create a collection (table)
-        self.bm = self.db[COLLECTION_NAME]  # set collection for bookmarks storage
+        self.bm = self.db.create_collection(COLLECTION_NAME,
+                                            validator=folder_json_schema)  # set collection for bookmarks storage
         # create a roots document
         guid = uuid.uuid4()  # guid for roots
         roots_date = datetime.utcnow()  # date_added and date_modified for roots
