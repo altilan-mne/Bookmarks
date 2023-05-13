@@ -1,4 +1,6 @@
 """A Model part of Bookmark Manager (BM) implemented with Mongo DB (document db model).
+Distribution database with replica set.
+
 There are 2 types of nodes: folders and urls (leaf node).
 Version 3.1 has a new db data structure optimized for atomic (only one document at once) write operation.
 This is preparation for the transition to the distributed model of BM.
@@ -29,10 +31,17 @@ JSON schema validation performs dynamic verification of the database documents.
 Version 3.1 is prepared for a local Mongo instance (mongod) for testing purposes.
 """
 
+from pprint import pprint
+
 from pymongo import MongoClient, database, collection
+from pymongo import WriteConcern
 from datetime import datetime
 import uuid
 import typing as t
+import pymongo.errors as pme
+
+
+from time import sleep  # for testing only
 
 from time_convert import stamp_to_object, stamp_to_string
 from time_convert import stamp_to_object
@@ -40,20 +49,27 @@ import exceptions
 from common import URL_FIELDS, FOLDER_FIELDS  # fields enabled to update
 from schema_mongo import folder_json_schema  # JSON schema of validation
 
-LOCAL_URI = 'localhost:27017'  # local connection for the mongod
 DB_NAME = 'bookmarks'  # database name by default
 COLLECTION_NAME = 'bm'
 
-class ModelMongod:
-    """Implementation of a Model module with standalone MongoDB instance.
+class ModelMongoRS:
+    """Implementation of a Model module with a replica set of 3 MongoDB instances.
 
     """
-    def __init__(self):
+    def __init__(self, mongo_seeds: list, server_timeout: int):
         """Construction method.
+
+        :param mongo_seeds:  hosts list of the replica set to connect
         """
 
-        # create a client and connect to the running MongoDB standalone server (mongod)
-        self.client: MongoClient = MongoClient(LOCAL_URI, uuidRepresentation='standard')
+        # create a client and connect to the running MongoDB replica set
+        # MongoClient constructor is non-blocking, no timeout exception
+        self.client: MongoClient = MongoClient(mongo_seeds, uuidRepresentation='standard',
+                                                   serverSelectionTimeoutMS=server_timeout)
+        sleep(server_timeout / 1000)  # timeout to connect to a replica set
+        if not self.client.nodes:  # frozenset of nodes is empty, connection is failed
+            raise exceptions.DatabaseConnectError('No connected nodes')  # connection error
+
         self.db: database.Database = None  # type: ignore # database name
         self.bm: collection.Collection = None  # type: ignore # collection name
         self.cwd = ''  # for compatibility with the Model interface
@@ -280,14 +296,14 @@ class ModelMongod:
 
 
     # ---- database section ----
-    def create_database(self, name: str):
-        """Create a database and fill 'roots' document on the Mongo server.
+    def create_database(self, name: str) -> tuple[bool, str]:
+        """Create a database and fill 'roots' document on the Mongo replica set.
         Connection established.
 
         :exceptions: FileExistsError if given filename exists
 
         :param name: name of the new database
-        :return: nothing
+        :return: result (True |  False), empty | error message
         """
         # check if database 'name' already exists on the connected server
         if name in self.client.list_database_names():
@@ -336,32 +352,98 @@ class ModelMongod:
         self.db = None  # type: ignore # database name is undefined
         self.bm = None  # type: ignore # collection name is undefined
 
+# -------- section for test methods of main() --------
+def replica_init():
+    """Test replica initialisation.
+    Call once after 3 mongod were started.
+    """
+    # create a client and connect to the running MongoDB server (mongod)
+    client = MongoClient('localhost', 27018, directConnection=True)  # type: ignore
+    config = {'_id': 'rs3', 'members': [
 
+        {'_id': 0, 'host': 'localhost:27018'},
 
+        {'_id': 1, 'host': 'localhost:27019'},
+
+        {'_id': 2, 'host': 'localhost:27020'}]}
+
+    client.admin.command("replSetInitiate", config)
+
+def replica_info(db):
+    """Get current replica information.
+    db - current connection and database.
+
+    """
+    replica_info = db.command({'isMaster': 1})  # get replica info as a dict
+    print(f"Replica set name: {replica_info['setName']}")
+    print(f"Replica's hosts: {replica_info['hosts']}")  # list of the replica hosts
+    print(f"Primary node: {replica_info['primary']}")  # get a primary host
+    print(f"Answered node: {replica_info['me']}")  # a node which answers
+    print(f"Is this node a master? {replica_info['ismaster']}")
+    print(f"Is this node a secondary? {replica_info['secondary']}")
 
 def main():
     """Test Mongo DB interface.
-
+    Replica set: primary and two secondary nodes, ports 27018, 27019,27020 on the local interface.
+    Configuration files: /etc/mongo_configs/db0.conf, db1.conf, db2.conf
+    Database directories: /var/lib/mongodata/db0 | db1 | db2
+    Log directories: /var/log/mongologs/log0 | log1 | log2,  file mongod.log creates by the daemon.
+    Daemon's start: sudo mongod -f db(N).conf
+    Daemon stop: kill -STOP PID of the mongod instance
+    Daemon continue: kill -CONT PID of the mongod instance
     """
-    # create a client and connect to the running MongoDB server (mongod)
-    client = MongoClient(LOCAL_URI, uuidRepresentation='standard')  # type: ignore
-    db = client.testing  # connect to the existing database
-    coll = db.my_tree  # connect to the existing collection  (aka table for SQL)
+    try:
+        replica_init()  # initialisation of the replica set
+    except pme.OperationFailure as e:
+        if e.details['codeName'] != 'AlreadyInitialized':
+            raise  # re-raise OperationFailure invoked by another error
 
+    client = MongoClient('localhost:27018')
+    db = client.testing  # connect to the existing database
+    # replica_info(db)
+    print(client.primary)
+    sleep(0.1)
+    print(client.primary)
+
+
+    wc = WriteConcern(w=3, wtimeout=2000)  # set write_concern to 0
+
+    coll = db.get_collection('my_tree', write_concern=wc)  # collection
+
+    # pprint(client.admin.command({'getDefaultRWConcern': 1}))  # call db.adminCommand() from pymongo
+
+    # default_wc = client.options.read_concern  # return WriteConcern instance for the client
+    # print(default_wc.level)
+
+    # roles = db.command('rolesInfo', 1,
+    #                    showBuiltinRoles=True)  # get all roles in the current db
+    # pprint(roles)
+
+
+    # print(client.options.read_preference)
     # document presents in Python as a dictionary: by key, value pairs
     # document is an item aka row in SLQ
     doc1 = {'name': 'folder', 'type_id': True, 'children': [
         {'name': 'node1', '_id': 1}, {'name': 'node2', '_id': 2}
     ]}  # a document
 
+
+
     # insert a document into collection
-    # into existing collection
+    # wait an input from kbd
+    # key = input()
+
+
     # insert_one() returns an instance of InsertOneResult
     # InsertOneResult().inserted_id returns an id of the inserted doc
     # InsertOneResult().acknowledged returns if writing was acknowledged (when concerning about writing result)
-    doc1_id = coll.insert_one(doc1) # return an instance
+    doc1_id = coll.insert_one(doc1)  # return an instance
     print(doc1_id, doc1_id.inserted_id, doc1_id.acknowledged)
 
+    pass
+
+    # client.drop_database(db)
+'''
     print(coll.find_one())  # fetch one result directly
 
     for d in coll.find({}):  # fetch all documents by cursor, not documents
@@ -408,6 +490,7 @@ def main():
     result = coll.insert_one(
         {'guid': copy_guid, 'name': 'test node'}
     )
+'''
 
 if __name__ == '__main__':
     main()

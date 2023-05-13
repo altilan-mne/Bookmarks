@@ -41,3 +41,10 @@ class FolderNotEmpty(MyProjectError):
             f'Folder <{folder_name}> is not empty and can not be deleted {chr(10)}'
         )
 
+class DatabaseConnectError(MyProjectError):
+    """Raise when Model can not connect to a remote database, standalone, replica set or cluster.
+    Get an error message from a database driver."""
+    def __init__(self, error_message):
+        super().__init__(
+            f'Database connection failed:  <{error_message}> {chr(10)}'
+        )

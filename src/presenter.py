@@ -11,12 +11,14 @@ import typing as t
 
 import exceptions  # user exceptions
 from model_interface import Model
-from model_mongod import ModelMongod  # connection to the Model part of the pattern
+from mongod_rs import ModelMongoRS  # connection to the Model part of the pattern
+
 
 from view_interface import View
 from view_cli import ViewCLI  # connection to the View part of the pattern
 
-from common import VERSION
+from common import MONGO_SEEDS  # local MongoDb seeds, e.g. hosts
+from common import SERVER_SELECTION_TIMEOUT_MS
 from common import VERSION
 from common import VALID_CHARS, URL_FIELDS, FOLDER_FIELDS  # constants
 from common import MenuItem, Field  # user types
@@ -50,7 +52,13 @@ class Presenter:
 
         self.view = View(ViewCLI())  # instance of a View implementation, here for CLI terminal
         self.menu_items: tuple[MenuItem, ...] = self.START_MENU    # prepare for start main menu
-        self.model = Model(ModelMongod()) # instance of a Model implementation, here for mongod  version
+        try:
+            self.model = Model(ModelMongoRS(MONGO_SEEDS,
+                                            SERVER_SELECTION_TIMEOUT_MS))  # instance for mongo replica set version
+        except exceptions.DatabaseConnectError as e:
+            error_message = f'{e}Try reconnect later'
+            self.view.output_string(error_message)  # output error
+            exit(1)  # stop execution with error 1
 
     # ---- begin of the execution methods section ----
     @staticmethod
