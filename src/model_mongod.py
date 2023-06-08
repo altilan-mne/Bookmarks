@@ -48,12 +48,15 @@ class ModelMongod:
     """Implementation of a Model module with standalone MongoDB instance.
 
     """
-    def __init__(self):
+    def __init__(self, connect_timeout=200):
         """Construction method.
+
+        :param connect_timeout: 'serverSelectionTimeoutMS' value, 200ms instead 30000ms by default from pymongo
         """
 
         # create a client and connect to the running MongoDB standalone server (mongod)
-        self.client: MongoClient = MongoClient(LOCAL_URI, uuidRepresentation='standard')
+        self.client: MongoClient = MongoClient(LOCAL_URI, uuidRepresentation='standard',
+                                               serverSelectionTimeoutMS=connect_timeout)
         self.db: database.Database = None  # type: ignore # database name
         self.bm: collection.Collection = None  # type: ignore # collection name
         self.cwd = ''  # for compatibility with the Model interface
@@ -142,11 +145,11 @@ class ModelMongod:
             if 'icon' in attr_dict:
                 add_doc['icon'] = attr_dict['icon']
             else:
-                attr_dict['icon'] = ''
+                add_doc['icon'] = ''
             if 'keywords' in attr_dict:
                 add_doc['keywords'] = attr_dict['keywords']
             else:
-                attr_dict['keywords'] = ''
+                add_doc['keywords'] = ''
 
         # concatenate common and additional docs and insert the new node
         full_doc = common_doc | add_doc
