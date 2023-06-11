@@ -181,15 +181,14 @@ class ModelMongod:
         :param attr_dict: dictionary with the updating fields
         :return: nothing
         """
-        if not attr_dict:
-            return  # return if attr_dict parameter is empty
-
         # check if the node exists
         node_type, children = self.get_children(name)  # raise NodeNotExists if the node does not exist
         # if we are here then the node exists
         if node_type:
             # this is a folder
             update_dict = {k: v for (k, v) in attr_dict.items() if k in FOLDER_FIELDS }  # folder fields only
+            if not update_dict:
+                return  # return if all fields were shaven
             # update the document e.g. folder, date_modified of the parent folder remains unchanged
             res = self.bm.update_one(
                 {'name': name},  # find condition
@@ -198,6 +197,8 @@ class ModelMongod:
         else:
             # this is an url, name, url, icon, keywords allowed only
             update_dict = {'children.$.' + k: v for (k, v) in attr_dict.items() if k in URL_FIELDS}  # url fields only
+            if not update_dict:
+                return  # return if all fields were shaven
             update_dict['date_modified'] = datetime.utcnow()  # include new 'date_modified' to the mongodb expression
             # update operator
             res = self.bm.update_one(
